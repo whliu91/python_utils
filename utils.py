@@ -1,6 +1,7 @@
 import os
 import csv
 import decimal
+import re
 
 SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
 
@@ -82,27 +83,32 @@ def scientific_to_normal(val, prec=8):
     d1 = ctx.create_decimal(repr(float(val)))
     return format(d1, 'f')
 
+def get_list_of_fields_from_ddl(ddl):
+    '''Get all column names as list from ddl
+    depends on column names to be between `` and line separated
+    '''
+    lines = ddl.split("\n")
+    results = []
+    for line in lines:
+        result = re.search('`(.*)`', line)
+        if result:
+            results.append(result.group(1))
+    return results
+
 if __name__ == "__main__":
     # testing
-    res = read_csv_to_list("C:\\Users\\d891834\\projects\\harmony\\ingestion_curation\\datasource-properties\\src\\test\\resources\\sources\\expectedoutput\\r\\c\\edevil\\w_headroom_nodeb\\w_Headroom_NodeB_20180907.csv")
-    new_list_of_list = []
-    for column in res:
-        new_list = []
-        for val in column:
-            if is_number(val) and float(val) > 0.000001:
-                val = str(reduce_to_decimals(val))
-                if 'E' in val.upper():
-                    power = -int(val.upper().split('E')[1])
-                    val = scientific_to_normal(val, 9-power)
-                if len(val) < 10:
-                    for i in range(10 - len(val)):
-                        val += "0"
+    ddl = '''CREATE DATABASE IF NOT EXISTS c_nsbu_headspin;
+CREATE EXTERNAL TABLE IF NOT EXISTS c_nsbu_headspin.device_loc
+(  `iteration_number` bigint,
+`location` string,
+`machine_name` string,
+`device_id` string,
+`device_type` string,
+`latitude` float,
+`longitude` float,
+`lat_lon` string)
+STORED AS ORC
+LOCATION '/data/c/nsbu/headspin/device_loc';
+    '''
 
-            new_list.append(val)
-        
-        new_list_of_list.append(new_list)
-    
-    print(new_list_of_list)
-    write_list_to_csv(new_list_of_list, "C:\\Users\\d891834\\projects\\harmony\\ingestion_curation\\datasource-properties\\src\\test\\resources\\sources\\expectedoutput\\r\\c\\edevil\\w_headroom_nodeb\\w_Headroom_NodeB_20180907.csv")
-
-
+    print(get_list_of_fields_from_ddl(ddl))
