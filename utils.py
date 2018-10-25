@@ -2,6 +2,8 @@ import os
 import csv
 import decimal
 import re
+from shutil import copyfile
+from datetime import datetime
 
 SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
 
@@ -95,20 +97,76 @@ def get_list_of_fields_from_ddl(ddl):
             results.append(result.group(1))
     return results
 
-if __name__ == "__main__":
-    # testing
-    ddl = '''CREATE DATABASE IF NOT EXISTS c_nsbu_headspin;
-CREATE EXTERNAL TABLE IF NOT EXISTS c_nsbu_headspin.device_loc
-(  `iteration_number` bigint,
-`location` string,
-`machine_name` string,
-`device_id` string,
-`device_type` string,
-`latitude` float,
-`longitude` float,
-`lat_lon` string)
-STORED AS ORC
-LOCATION '/data/c/nsbu/headspin/device_loc';
+def append_header_to_csv(csv_file, headers):
+    '''Append header (in a list) to csv file
     '''
+    with open(csv_file, newline='') as f:
+        r = csv.reader(f)
+        data = [line for line in r]
+    with open(csv_file, 'w', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(headers)
+        w.writerows(data)
 
-    print(get_list_of_fields_from_ddl(ddl))
+def append_to_file_name_in_folder_with_extensions(folder, extension, addon):
+    '''
+    something.csv to somethingaddon.csv
+    '''
+    for file in os.listdir(folder):
+        if file.endswith(extension):
+            newname = file.replace(extension, addon + extension)
+            os.rename(os.path.join(folder, file), os.path.join(folder, newname))
+
+def create_folder_in_folder_from_list(folder, folder_list):
+    '''Create all folders in the list in the folder given
+    '''
+    for item in folder_list:
+        full_path = os.path.join(folder, item)
+        if not os.path.exists(full_path):
+            os.makedirs(full_path)
+
+def copy_file_from_list_to_corresponding_folder(src_dir, dst_dir, ext):
+    '''Copy files from src dir to corresponding folder in dst_dir, by name
+    /src_dir/something_123456.csv -> /dst_dir/something/something_123456.csv
+    '''
+    for file in os.listdir(src_dir):
+        if file.endswith(ext):
+            file_full_path = os.path.join(src_dir, file)
+            for folder in os.listdir(dst_dir):
+                if folder in file:
+                    copyfile(file_full_path, os.path.join(dst_dir, folder, file))
+
+def add_date_to_csv_from_filename(src_dir):
+    for folder in os.listdir(src_dir):
+        regex_pattern = folder + "_(\d{8}).*.csv"
+        for file in os.listdir(os.path.join(src_dir, folder)):
+            result = re.search(regex_pattern, file)
+            src_date_raw = result.group(1)
+            src_date = datetime.strptime(src_date_raw, "%Y%m%d")
+            src_date_formatted = src_date.strftime("%Y-%m-%d")
+            file_full_path = os.path.join(src_dir, folder, file)
+            csv_data = read_csv_to_list(file_full_path)
+            if "src_date" not in csv_data[0]:
+                count = 0
+                for row in csv_data:
+                    if count == 0:
+                        row.append("src_date")
+                    else:
+                        row.append(src_date_formatted)
+                    count += 1
+                
+                write_list_to_csv(csv_data, file_full_path)
+
+
+def get_field_from_create_table_statement(stmt):
+    '''Get fields from sql create table statement
+    WIP: this is buggy: does not work if there is Decimal(xxx,xxx) within fields
+    '''
+    pattern = r'\(((.|\n)*?)\)'
+    fields = re.search(pattern, stmt).group(1)
+    rows = [item.strip() for item in fields.replace("\n", "").replace("`", "").split(',')]
+    field_names = [row.split()[0] for row in rows]
+    return field_names
+
+if __name__ == "__main__":
+    pass
